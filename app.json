@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pricemymeds.app",
+      "bundleIdentifier": "com.gbh.pricemymed",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "PriceMyMeds uses your location to find nearby pharmacies and show local pricing.",
