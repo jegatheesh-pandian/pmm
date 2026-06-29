@@ -17,6 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.pricemymeds.app",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "PriceMyMeds uses your location to find nearby pharmacies and show local pricing.",
         "NSCameraUsageDescription": "PriceMyMeds uses your camera to scan prescription barcodes."
       }
