@@ -11,7 +11,7 @@
 import { useState, useMemo } from 'react';
 import { View, StyleSheet, TextInput as RNTextInput } from 'react-native';
 import { Text, Button, Portal, Modal } from 'react-native-paper';
-import { Picker } from '@react-native-picker/picker';
+import { SelectDropdown } from '@/components/ui/SelectDropdown';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { spacing, borderRadius, fontSize } from '@/theme';
 import type { Drug } from '@/types/drug';
@@ -43,10 +43,10 @@ export function PrescriptionSelector({
   const [showCustomQty, setShowCustomQty] = useState(false);
   const [customQty, setCustomQty] = useState('');
 
-  // Find the active brand alternative
+  // Find the active brand alternative (use seoName like web app)
   const activeBrand = useMemo(() => {
     if (!selectedBrand || !drug.brandAlternatives?.length) return null;
-    return drug.brandAlternatives.find((b) => b.seoUrlName === selectedBrand) ?? null;
+    return drug.brandAlternatives.find((b) => b.seoName === selectedBrand) ?? null;
   }, [drug.brandAlternatives, selectedBrand]);
 
   // Available forms from brand alternative or drug
@@ -75,12 +75,12 @@ export function PrescriptionSelector({
     return drug.quantities.map(String);
   }, [activeBrand, drug.quantities, selectedForm, selectedDosage]);
 
-  // Brand options
+  // Brand options (use seoName as value like web app)
   const brandOptions = useMemo(() => {
     if (!drug.brandAlternatives?.length) return [];
     return drug.brandAlternatives.map((b) => ({
-      value: b.seoUrlName,
-      label: `${b.displayName}`,
+      value: b.seoName,
+      label: b.displayName,
     }));
   }, [drug.brandAlternatives]);
 
@@ -106,19 +106,12 @@ export function PrescriptionSelector({
             <Text variant="labelSmall" style={[styles.label, { color: colors.onSurfaceVariant }]}>
               Select Brand
             </Text>
-            <View style={[styles.pickerWrapper, { borderColor: brandColors.primary }]}>
-              <Picker
-                selectedValue={selectedBrand}
-                onValueChange={onBrandChange}
-                style={[styles.picker, { color: colors.onSurface }]}
-                dropdownIconColor={colors.onSurfaceVariant}
-                accessibilityLabel="Select brand or generic"
-              >
-                {brandOptions.map((opt) => (
-                  <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-                ))}
-              </Picker>
-            </View>
+            <SelectDropdown
+              value={selectedBrand}
+              options={brandOptions}
+              onValueChange={onBrandChange}
+              accessibilityLabel="Select brand or generic"
+            />
           </View>
         )}
 
@@ -127,19 +120,12 @@ export function PrescriptionSelector({
           <Text variant="labelSmall" style={[styles.label, { color: colors.onSurfaceVariant }]}>
             Select Form
           </Text>
-          <View style={[styles.pickerWrapper, { borderColor: brandColors.primary }]}>
-            <Picker
-              selectedValue={selectedForm}
-              onValueChange={onFormChange}
-              style={[styles.picker, { color: colors.onSurface }]}
-              dropdownIconColor={colors.onSurfaceVariant}
-              accessibilityLabel="Select drug form"
-            >
-              {availableForms.map((form) => (
-                <Picker.Item key={form} label={form} value={form} />
-              ))}
-            </Picker>
-          </View>
+          <SelectDropdown
+            value={selectedForm}
+            options={availableForms.map((form) => ({ label: form, value: form }))}
+            onValueChange={onFormChange}
+            accessibilityLabel="Select drug form"
+          />
         </View>
 
         {/* Select Dosage */}
@@ -147,19 +133,12 @@ export function PrescriptionSelector({
           <Text variant="labelSmall" style={[styles.label, { color: colors.onSurfaceVariant }]}>
             Select Dosage
           </Text>
-          <View style={[styles.pickerWrapper, { borderColor: brandColors.primary }]}>
-            <Picker
-              selectedValue={selectedDosage}
-              onValueChange={onDosageChange}
-              style={[styles.picker, { color: colors.onSurface }]}
-              dropdownIconColor={colors.onSurfaceVariant}
-              accessibilityLabel="Select dosage"
-            >
-              {availableDosages.map((dosage) => (
-                <Picker.Item key={dosage} label={dosage} value={dosage} />
-              ))}
-            </Picker>
-          </View>
+          <SelectDropdown
+            value={selectedDosage}
+            options={availableDosages.map((dosage) => ({ label: dosage, value: dosage }))}
+            onValueChange={onDosageChange}
+            accessibilityLabel="Select dosage"
+          />
         </View>
 
         {/* Select Quantity */}
@@ -167,28 +146,21 @@ export function PrescriptionSelector({
           <Text variant="labelSmall" style={[styles.label, { color: colors.onSurfaceVariant }]}>
             Select Quantity
           </Text>
-          <View style={[styles.pickerWrapper, { borderColor: brandColors.primary }]}>
-            <Picker
-              selectedValue={
-                availableQuantities.includes(selectedQuantity) ? selectedQuantity : 'custom'
+          <SelectDropdown
+            value={availableQuantities.includes(selectedQuantity) ? selectedQuantity : 'custom'}
+            options={[
+              ...availableQuantities.map((qty) => ({ label: `${qty} count`, value: qty })),
+              { label: 'Custom...', value: 'custom' },
+            ]}
+            onValueChange={(val) => {
+              if (val === 'custom') {
+                setShowCustomQty(true);
+              } else {
+                onQuantityChange(val);
               }
-              onValueChange={(val) => {
-                if (val === 'custom') {
-                  setShowCustomQty(true);
-                } else {
-                  onQuantityChange(val);
-                }
-              }}
-              style={[styles.picker, { color: colors.onSurface }]}
-              dropdownIconColor={colors.onSurfaceVariant}
-              accessibilityLabel="Select quantity"
-            >
-              {availableQuantities.map((qty) => (
-                <Picker.Item key={qty} label={`${qty} count`} value={qty} />
-              ))}
-              <Picker.Item label="Custom..." value="custom" />
-            </Picker>
-          </View>
+            }}
+            accessibilityLabel="Select quantity"
+          />
         </View>
       </View>
 
@@ -246,14 +218,6 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: '600',
     textTransform: 'none',
-  },
-  pickerWrapper: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 54,
   },
   customModal: {
     margin: spacing[4],

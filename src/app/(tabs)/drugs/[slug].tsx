@@ -94,20 +94,46 @@ export default function DrugPricingScreen() {
   const { data: drug, isLoading: isLoadingDrug } = useDrugConfig(slug ?? '');
   const { data: alternatives } = useDrugAlternatives(slug);
 
-  // Initialize selections when drug loads
+  // Initialize selections when drug loads - use brand's formStrengthQuantities
   useEffect(() => {
     if (!drug) return;
-    setSelectedBrand(drug.brandAlternatives?.[0]?.seoUrlName ?? drug.slug);
-    setSelectedForm(drug.defaultForm ?? drug.forms[0] ?? '');
-    setSelectedDosage(drug.defaultDosage ?? drug.dosages[0] ?? '');
-    setSelectedQuantity(drug.defaultQuantity ?? String(drug.quantities[0] ?? '30'));
+
+    const firstBrand = drug.brandAlternatives?.[0];
+    const brandSeoName = firstBrand?.seoName ?? drug.slug;
+    setSelectedBrand(brandSeoName);
+
+    // Get form/dosage/quantity from brand's formStrengthQuantities (like web app)
+    if (firstBrand?.formStrengthQuantities) {
+      const forms = Object.keys(firstBrand.formStrengthQuantities);
+      const firstForm = forms[0] ?? '';
+      setSelectedForm(firstForm);
+
+      if (firstForm && firstBrand.formStrengthQuantities[firstForm]) {
+        const dosages = Object.keys(firstBrand.formStrengthQuantities[firstForm]);
+        const firstDosage = dosages[0] ?? '';
+        setSelectedDosage(firstDosage);
+
+        if (firstDosage) {
+          const quantities = firstBrand.formStrengthQuantities[firstForm][firstDosage];
+          // Prefer default quantity or first one
+          const defaultQty = quantities?.find(q => q.isDefault);
+          setSelectedQuantity(defaultQty?.quantity ?? quantities?.[0]?.quantity ?? '30');
+        }
+      }
+    } else {
+      // Fallback to drug-level defaults
+      setSelectedForm(drug.defaultForm ?? drug.forms[0] ?? '');
+      setSelectedDosage(drug.defaultDosage ?? drug.dosages[0] ?? '');
+      setSelectedQuantity(drug.defaultQuantity ?? String(drug.quantities[0] ?? '30'));
+    }
+
     addToHistory(drug.slug, drug.name);
   }, [drug, addToHistory]);
 
   // Get current NDC for drug description
   const currentNdc = useMemo(() => {
     if (!drug?.brandAlternatives) return drug?.ndc ?? undefined;
-    const brand = drug.brandAlternatives.find((b) => b.seoUrlName === selectedBrand);
+    const brand = drug.brandAlternatives.find((b) => b.seoName === selectedBrand);
     const qtyOpts = brand?.formStrengthQuantities?.[selectedForm]?.[selectedDosage];
     const match = qtyOpts?.find((q) => q.quantity === selectedQuantity);
     return match ? String(match.ndc ?? match.gpi ?? '') : drug.ndc;
@@ -138,7 +164,7 @@ export default function DrugPricingScreen() {
   // Get current MedispanId from brand alternatives
   const currentMedispanId = useMemo(() => {
     if (!drug?.brandAlternatives) return null;
-    const brand = drug.brandAlternatives.find((b) => b.seoUrlName === selectedBrand);
+    const brand = drug.brandAlternatives.find((b) => b.seoName === selectedBrand);
     const qtyOpts = brand?.formStrengthQuantities?.[selectedForm]?.[selectedDosage];
     const match = qtyOpts?.find((q) => q.quantity === selectedQuantity);
     return match?.drugInformationMedispanId ?? null;
@@ -363,24 +389,57 @@ export default function DrugPricingScreen() {
           selectedForm={selectedForm}
           selectedDosage={selectedDosage}
           selectedQuantity={selectedQuantity}
-          onBrandChange={setSelectedBrand}
+          onBrandChange={(brandSeoName) => {
+            setSelectedBrand(brandSeoName);
+            // Cascade: reset form/dosage/quantity from new brand's formStrengthQuantities
+            const brand = drug.brandAlternatives?.find((b) => b.seoName === brandSeoName);
+            if (brand?.formStrengthQuantities) {
+              const forms = Object.keys(brand.formStrengthQuantities);
+              // Keep current form if available in new brand, else use first
+              const newForm = forms.includes(selectedForm) ? selectedForm : forms[0] ?? '';
+              setSelectedForm(newForm);
+
+              if (newForm && brand.formStrengthQuantities[newForm]) {
+                const dosages = Object.keys(brand.formStrengthQuantities[newForm]);
+                // Keep current dosage if available, else use first
+                const newDosage = dosages.includes(selectedDosage) ? selectedDosage : dosages[0] ?? '';
+                setSelectedDosage(newDosage);
+
+                if (newDosage) {
+                  const quantities = brand.formStrengthQuantities[newForm][newDosage];
+                  const qtyValues = quantities?.map(q => q.quantity) ?? [];
+                  // Keep current quantity if available, else use default or first
+                  if (qtyValues.includes(selectedQuantity)) {
+                    // Keep current
+                  } else {
+                    const defaultQty = quantities?.find(q => q.isDefault);
+                    setSelectedQuantity(defaultQty?.quantity ?? quantities?.[0]?.quantity ?? '30');
+                  }
+                }
+              }
+            }
+          }}
           onFormChange={(form) => {
             setSelectedForm(form);
-            const brand = drug.brandAlternatives?.find((b) => b.seoUrlName === selectedBrand);
+            const brand = drug.brandAlternatives?.find((b) => b.seoName === selectedBrand);
             const dosages = brand?.formStrengthQuantities?.[form];
             if (dosages) {
-              const firstDosage = Object.keys(dosages)[0];
-              setSelectedDosage(firstDosage ?? '');
-              const qtys = dosages[firstDosage];
-              setSelectedQuantity(qtys?.[0]?.quantity ?? '30');
+              const dosageKeys = Object.keys(dosages);
+              // Keep current dosage if available, else use first
+              const newDosage = dosageKeys.includes(selectedDosage) ? selectedDosage : dosageKeys[0] ?? '';
+              setSelectedDosage(newDosage);
+              const qtys = dosages[newDosage];
+              const defaultQty = qtys?.find(q => q.isDefault);
+              setSelectedQuantity(defaultQty?.quantity ?? qtys?.[0]?.quantity ?? '30');
             }
           }}
           onDosageChange={(dosage) => {
             setSelectedDosage(dosage);
-            const brand = drug.brandAlternatives?.find((b) => b.seoUrlName === selectedBrand);
+            const brand = drug.brandAlternatives?.find((b) => b.seoName === selectedBrand);
             const qtys = brand?.formStrengthQuantities?.[selectedForm]?.[dosage];
             if (qtys?.length) {
-              setSelectedQuantity(qtys[0].quantity);
+              const defaultQty = qtys.find(q => q.isDefault);
+              setSelectedQuantity(defaultQty?.quantity ?? qtys[0].quantity);
             }
           }}
           onQuantityChange={setSelectedQuantity}

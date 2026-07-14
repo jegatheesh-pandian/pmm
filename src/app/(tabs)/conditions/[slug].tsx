@@ -33,10 +33,34 @@ import type { ConditionDrug, ConditionFaqItem, ConditionDisplay } from '@/types/
 
 const DRUGS_PAGE_SIZE = 20;
 
-/** Parse HTML reference into inline segments: plain text, links, and italic text */
-type RefSegment = { type: 'text'; value: string } | { type: 'link'; value: string; url: string } | { type: 'italic'; value: string };
+/** Parse HTML content into inline segments: plain text, links, and italic text */
+type HtmlSegment = { type: 'text'; value: string } | { type: 'link'; value: string; url: string } | { type: 'italic'; value: string };
 
-function parseReferences(html: string): RefSegment[][] {
+/** Parse HTML string into segments for rendering (handles <a>, <em> tags) */
+function parseHtmlContent(html: string): HtmlSegment[] {
+  const segments: HtmlSegment[] = [];
+  // Tokenize: match <a> tags, <em> tags, or plain text between them
+  const tokenRegex = /<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>|<em>([\s\S]*?)<\/em>|([^<]+)/gi;
+  let match;
+  while ((match = tokenRegex.exec(html)) !== null) {
+    if (match[1] !== undefined && match[2] !== undefined) {
+      // <a> tag — strip any inner HTML
+      const linkText = match[2].replace(/<[^>]+>/g, '').trim();
+      if (linkText) segments.push({ type: 'link', value: linkText, url: match[1] });
+    } else if (match[3] !== undefined) {
+      // <em> tag
+      const emText = match[3].replace(/<[^>]+>/g, '').trim();
+      if (emText) segments.push({ type: 'italic', value: emText });
+    } else if (match[4]) {
+      // Plain text
+      const plain = match[4].replace(/\s+/g, ' ');
+      if (plain.trim()) segments.push({ type: 'text', value: plain });
+    }
+  }
+  return segments;
+}
+
+function parseReferences(html: string): HtmlSegment[][] {
   // Split by <p>...</p> blocks
   const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   const blocks: string[] = [];
@@ -47,7 +71,7 @@ function parseReferences(html: string): RefSegment[][] {
   if (blocks.length === 0) blocks.push(html);
 
   return blocks.map((block) => {
-    const segments: RefSegment[] = [];
+    const segments: HtmlSegment[] = [];
     // Tokenize: match <a> tags, <em> tags, or plain text between them
     const tokenRegex = /<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>|<em>([\s\S]*?)<\/em>|([^<]+)/gi;
     let tk;
@@ -315,7 +339,29 @@ export default function ConditionDetailScreen() {
                 </View>
               </View>
               {expandedFaqIndex === i && (
-                <Text style={styles.faqAnswer}>{faq.answers}</Text>
+                <Text style={styles.faqAnswer}>
+                  {parseHtmlContent(faq.answers).map((seg, j) => {
+                    if (seg.type === 'link') {
+                      return (
+                        <Text
+                          key={j}
+                          style={styles.faqLink}
+                          onPress={() => Linking.openURL(seg.url)}
+                        >
+                          {seg.value}
+                        </Text>
+                      );
+                    }
+                    if (seg.type === 'italic') {
+                      return (
+                        <Text key={j} style={{ fontStyle: 'italic' }}>
+                          {seg.value}
+                        </Text>
+                      );
+                    }
+                    return <Text key={j}>{seg.value}</Text>;
+                  })}
+                </Text>
               )}
             </Pressable>
           ))}
@@ -605,6 +651,10 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     paddingHorizontal: 14,
     paddingBottom: 14,
+  },
+  faqLink: {
+    color: '#0D7377',
+    textDecorationLine: 'underline',
   },
 
   // References
